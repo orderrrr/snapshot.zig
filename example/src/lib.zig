@@ -23,7 +23,7 @@ pub fn formatPerson(allocator: std.mem.Allocator, name: []const u8, age: u32, ho
 test "snapshot: format person as JSON" {
     const allocator = std.testing.allocator;
 
-    var s: snapshot.Snapshot(allocator, @src()) = .{};
+    var s = snapshot.Snapshot(allocator, @src()).init();
     defer s.deinit();
 
     const hobbies = &[_][]const u8{ "reading", "gaming", "hiking" };
@@ -36,7 +36,7 @@ test "snapshot: format person as JSON" {
 test "snapshot: format person with no hobbies" {
     const allocator = std.testing.allocator;
 
-    var s: snapshot.Snapshot(allocator, @src()) = .{};
+    var s = snapshot.Snapshot(allocator, @src()).init();
     defer s.deinit();
 
     const hobbies = &[_][]const u8{};
@@ -49,7 +49,7 @@ test "snapshot: format person with no hobbies" {
 test "snapshot: multiple snapshots in one test" {
     const allocator = std.testing.allocator;
 
-    var s: snapshot.Snapshot(allocator, @src()) = .{};
+    var s = snapshot.Snapshot(allocator, @src()).init();
     defer s.deinit();
 
     const hobbies = &[_][]const u8{ "coding", "music" };

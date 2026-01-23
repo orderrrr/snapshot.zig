@@ -12,7 +12,13 @@ pub fn Snapshot(allocator: Allocator, comptime src: std.builtin.SourceLocation) 
         const snapshot_name = Fs.snapshotName(src);
 
         offset: u32 = 0,
-        fs: Fs = Fs.open(options.snapshot_dir) catch @panic("Failed to open snapshot directory"),
+        fs: Fs,
+
+        pub fn init() Self {
+            return .{
+                .fs = Fs.open(options.snapshot_dir) catch @panic("Failed to open snapshot directory"),
+            };
+        }
 
         pub fn deinit(self: *Self) void {
             self.fs.close();
@@ -60,7 +66,7 @@ pub fn Snapshot(allocator: Allocator, comptime src: std.builtin.SourceLocation) 
 // ============================================================================
 
 test "integration: snapshot write and verify" {
-    var s: Snapshot(std.testing.allocator, @src()) = .{};
+    var s = Snapshot(std.testing.allocator, @src()).init();
     defer s.deinit();
 
     const test_data = "hello world\nthis is a test\n";
@@ -77,7 +83,8 @@ test "integration: snapshot mismatch detection" {
     defer tmp.cleanup();
 
     // Create a custom snapshot instance pointing to temp dir
-    _ = Snapshot(std.testing.allocator, @src()){
+    const SnapshotType = Snapshot(std.testing.allocator, @src());
+    _ = SnapshotType{
         .offset = 0,
         .fs = .{ .dir = tmp.dir },
     };
