@@ -1,0 +1,10 @@
+.{
+    .name = .snapshot_example,
+    .version = "0.0.1",
+    .fingerprint = 0x55984f25c0884e74,
+    .minimum_zig_version = "0.15.0",
+    .paths = .{""},
+    .dependencies = .{
+        .snapshot = .{ .path = ".." },
+    },
+}
