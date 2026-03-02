@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Io = std.Io;
 
 const options = @import("snapshot_options");
 const util = @import("util.zig");
@@ -14,9 +15,9 @@ pub fn Snapshot(allocator: Allocator, comptime src: std.builtin.SourceLocation) 
         offset: u32 = 0,
         fs: Fs,
 
-        pub fn init() Self {
+        pub fn init(io: Io) Self {
             return .{
-                .fs = Fs.open(options.snapshot_dir) catch @panic("Failed to open snapshot directory"),
+                .fs = Fs.open(io, options.snapshot_dir) catch @panic("Failed to open snapshot directory"),
             };
         }
 
@@ -66,7 +67,7 @@ pub fn Snapshot(allocator: Allocator, comptime src: std.builtin.SourceLocation) 
 // ============================================================================
 
 test "integration: snapshot write and verify" {
-    var s = Snapshot(std.testing.allocator, @src()).init();
+    var s = Snapshot(std.testing.allocator, @src()).init(std.testing.io);
     defer s.deinit();
 
     const test_data = "hello world\nthis is a test\n";
@@ -78,6 +79,8 @@ test "integration: snapshot write and verify" {
 }
 
 test "integration: snapshot mismatch detection" {
+    const io = std.testing.io;
+
     // Use a temp directory for this test to avoid polluting snapshots/
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
@@ -86,25 +89,23 @@ test "integration: snapshot mismatch detection" {
     const SnapshotType = Snapshot(std.testing.allocator, @src());
     _ = SnapshotType{
         .offset = 0,
-        .fs = .{ .dir = tmp.dir },
+        .fs = .{ .dir = tmp.dir, .io = io },
     };
 
     // First, create a snapshot
     const original_data = "original content\n";
     // Force update mode by writing directly
     const filename = "test_mismatch_0.snapshot";
-    const file = try tmp.dir.createFile(filename, .{});
-    try file.writeAll(original_data);
-    file.close();
+    tmp.dir.writeFile(io, .{
+        .sub_path = filename,
+        .data = original_data,
+    }) catch @panic("Failed to write snapshot file");
 
     // Now verify with different data - should fail
     const different_data = "different content\n";
 
     // Manually load and compare since we can't call snap() with custom filename
-    const loaded = try tmp.dir.openFile(filename, .{});
-    defer loaded.close();
-
-    const expected = try loaded.readToEndAlloc(std.testing.allocator, 10 * 1024 * 1024);
+    const expected = tmp.dir.readFileAlloc(io, filename, std.testing.allocator, .limited(10 * 1024 * 1024)) catch @panic("Failed to read snapshot file");
     defer std.testing.allocator.free(expected);
 
     try std.testing.expect(!std.mem.eql(u8, expected, different_data));

@@ -11,7 +11,7 @@ const Person = struct {
 pub fn formatPerson(allocator: std.mem.Allocator, name: []const u8, age: u32, hobbies: []const []const u8) ![]u8 {
     const person = Person{ .name = name, .age = age, .hobbies = hobbies };
     const fmt = std.json.fmt(person, .{ .whitespace = .indent_2 });
-    var writer = std.io.Writer.Allocating.init(allocator);
+    var writer: std.Io.Writer.Allocating = .init(allocator);
     try fmt.format(&writer.writer);
     return writer.toOwnedSlice();
 }
@@ -23,7 +23,7 @@ pub fn formatPerson(allocator: std.mem.Allocator, name: []const u8, age: u32, ho
 test "snapshot: format person as JSON" {
     const allocator = std.testing.allocator;
 
-    var s = snapshot.Snapshot(allocator, @src()).init();
+    var s = snapshot.Snapshot(allocator, @src()).init(std.testing.io);
     defer s.deinit();
 
     const hobbies = &[_][]const u8{ "reading", "gaming", "hiking" };
@@ -36,7 +36,7 @@ test "snapshot: format person as JSON" {
 test "snapshot: format person with no hobbies" {
     const allocator = std.testing.allocator;
 
-    var s = snapshot.Snapshot(allocator, @src()).init();
+    var s = snapshot.Snapshot(allocator, @src()).init(std.testing.io);
     defer s.deinit();
 
     const hobbies = &[_][]const u8{};
@@ -49,7 +49,7 @@ test "snapshot: format person with no hobbies" {
 test "snapshot: multiple snapshots in one test" {
     const allocator = std.testing.allocator;
 
-    var s = snapshot.Snapshot(allocator, @src()).init();
+    var s = snapshot.Snapshot(allocator, @src()).init(std.testing.io);
     defer s.deinit();
 
     const hobbies = &[_][]const u8{ "coding", "music" };

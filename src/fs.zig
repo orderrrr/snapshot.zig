@@ -1,31 +1,33 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Dir = std.fs.Dir;
-const File = std.fs.File;
+const Dir = std.Io.Dir;
+const Io = std.Io;
 
 pub const Fs = struct {
     dir: Dir,
+    io: Io,
 
-    pub fn open(dir: []const u8) !Fs {
-        const cwd = std.fs.cwd();
-        const snapshot_dir = cwd.openDir(dir, .{}) catch |err| switch (err) {
-            error.FileNotFound => cwd.makeOpenPath(dir, .{}) catch |e| {
-                std.debug.print("Failed to create snapshot directory '{s}': {}\n", .{ dir, e });
+    pub fn open(io: Io, dir_path: []const u8) !Fs {
+        const cwd = Dir.cwd();
+        const snapshot_dir = cwd.openDir(io, dir_path, .{}) catch |err| switch (err) {
+            error.FileNotFound => cwd.createDirPathOpen(io, dir_path, .{}) catch |e| {
+                std.debug.print("Failed to create snapshot directory '{s}': {}\n", .{ dir_path, e });
                 @panic("Cannot initialize snapshot directory");
             },
             else => {
-                std.debug.print("Failed to open snapshot directory '{s}': {}\n", .{ dir, err });
+                std.debug.print("Failed to open snapshot directory '{s}': {}\n", .{ dir_path, err });
                 @panic("Cannot open snapshot directory");
             },
         };
 
         return .{
             .dir = snapshot_dir,
+            .io = io,
         };
     }
 
     pub fn close(self: *Fs) void {
-        self.dir.close();
+        self.dir.close(self.io);
     }
 
     pub fn writeSnapshot(self: *Fs, comptime src: std.builtin.SourceLocation, offset: u32, actual: []const u8) !void {
@@ -33,24 +35,21 @@ pub const Fs = struct {
         var buf: [256]u8 = undefined;
         const full_filename = std.fmt.bufPrint(&buf, "{s}:{d}.snapshot", .{ filename, offset }) catch unreachable;
 
-        const file = try self.dir.createFile(full_filename, .{});
-        defer file.close();
-
-        try file.writeAll(actual);
+        self.dir.writeFile(self.io, .{
+            .sub_path = full_filename,
+            .data = actual,
+        }) catch |e| return e;
 
         // TODO move to my logging util.
         std.debug.print("\x1b[32m[SNAPSHOT]\x1b[0m Updated: {s}\n", .{filename});
     }
 
-    pub fn loadSnapshot(self: *Fs, allocator: Allocator, offset: u32, comptime src: std.builtin.SourceLocation) File.OpenError![]u8 {
+    pub fn loadSnapshot(self: *Fs, allocator: Allocator, offset: u32, comptime src: std.builtin.SourceLocation) Dir.ReadFileAllocError![]u8 {
         const filename = comptime Fs.snapshotName(src);
         var buf: [256]u8 = undefined;
         const full_filename = std.fmt.bufPrint(&buf, "{s}:{d}.snapshot", .{ filename, offset }) catch unreachable;
 
-        const file = try self.dir.openFile(full_filename, .{});
-        defer file.close();
-
-        return file.readToEndAlloc(allocator, 32 * 1024 * 1024) catch @panic("Failed to read snapshot file");
+        return self.dir.readFileAlloc(self.io, full_filename, allocator, .limited(32 * 1024 * 1024));
     }
 
     pub fn snapshotName(comptime src: std.builtin.SourceLocation) *const [snapshotLen(src)]u8 {
